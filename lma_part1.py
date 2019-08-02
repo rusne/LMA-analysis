@@ -5,25 +5,12 @@ Created on Wed Aug 22 09:17:31 2018
 @author: REPAiR TU Delft Team
 
 """
-#____________START______READ_ME__________________________________
-# R E A D   ME - HOW TO RUN THIS SCRIPT
 
-# 1) Run the file as it is now (press F5)
-# 2) Download all the xlsx files from the drive folder REPAiR (TUD shared folder) > Data > Data AMA > LMA > Data Folder
-# 3) Then, in the newly created 'LMA data' folder in your directory, put here all the xlsx files from the Drive LMA Data folder you just downloaded
-# 4) Also add in the LMA files if you have the permission
-# 6) run file (press F5)
-# 7) Find export results in 'Export' folder that is within your LMA folder
-# 8) For any questions; you can reach me at michelle.steenmeijer@gmail.com
+# For any questions; you can reach at michelle.steenmeijer or rusne.sileryte
+#                                                                   @ gmail.com
 
-#______________________READ_ME________END________________________
-
-
-#_________________________________________________
 import os #use to create new folders and change in between different folders
-
 import pandas as pd #python data analysis library
-
 import numpy as np #python scientific computing library
 
 import warnings #ignore unnecessary warnings
