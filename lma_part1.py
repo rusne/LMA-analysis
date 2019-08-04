@@ -471,6 +471,10 @@ actors['Name'] = actors['Name'].str.replace('BV', '')
 actors['Name'] = actors['Name'].str.replace('B.V.', '')
 actors['Name'] = actors['Name'].str.strip()
 actors['Name'] = actors['Name'].str.upper()
+actors['Plaats'] = actors['Plaats'].str.strip()
+actors['Plaats'] = actors['Plaats'].str.upper()
+actors['Straat'] = actors['Straat'].str.strip()
+actors['Straat'] = actors['Straat'].str.upper()
 
 
 actors.drop_duplicates(subset=['Name', 'Postcode', 'who'], inplace=True)
@@ -489,18 +493,6 @@ roles.reset_index(name='count')
 roles.rename(columns={'LMA_key': 'count'}, inplace=True)
 roles.to_excel('actor_roles_summary.xlsx')
 
-# find out how many actors have the same address and if it is possible that they are they same actors
-actor_address = actors[['Name', 'Postcode', 'Huisnr']]
-actor_address = actors.drop_duplicates(subset=['Name', 'Postcode', 'Huisnr'])
-grouped_address = actor_address.groupby('Postcode')
-#grouped_roles = grouped_roles['who'].apply(lambda x: ', '.join(x))
-grouped_address = grouped_address.agg(lambda x: ', '.join(x)).reset_index()
-
-same_actors = grouped_address.groupby('Name')['Postcode'].count()
-same_actors.reset_index(name='count')
-same_actors.rename(columns={'Postcode': 'count'}, inplace=True)
-same_actors.to_excel('actor_same_actors.xlsx')
-
 
 actors.to_excel('Export_LMA_actors.xlsx')
 
@@ -508,7 +500,30 @@ actors_without_postcode = actors[actors['Postcode'] == '']
 # actors_with_postcode = actors[actors['Postcode'] != '']
 #
 # actors_with_postcode.to_excel('Export_LMA_actors.xlsx')
-actors_without_postcode.to_excel('Export_LMA_actors_without_postcode.xlsx')
+if len(actors_without_postcode.index) > 0:
+    actors_without_postcode.to_excel('Export_LMA_actors_without_postcode.xlsx')
+    print len(actors_without_postcode.index), 'actors do not have a postcode'
+else:
+    print 'All actors have a postcode'
+
+# export actors already prepared for the ORBIS batch search
+if not os.path.exists('ORBIS_batch_search'): # create folder if it does not exist
+    os.makedirs('ORBIS_batch_search')
+
+actors_batch = actors[['Name', 'Plaats']]
+actors_batch['Land'] = 'Netherlands'
+actors_batch.drop_duplicates(subset=['Name'], inplace=True)
+# limitation: multiple companies with the same name could also be located in different cities
+# assumption to be checked - a company with the same name in a different address should have still the same NACE code
+count = len(actors_batch.index)
+slices = range(0, count, 1000) + [count]
+for i in range(len(slices) - 1):
+    start = slices[i]
+    end = slices[i + 1]
+    actors_batch[start:end].to_excel('ORBIS_batch_search/LMA_{0}_{1}.xlsx'.format(scope, end), index = False)
+
+print count, "actors have to be searched in ORBIS database"
+
 
 #_____________________________________________________________________________
 #_____________________________________________________________________________
