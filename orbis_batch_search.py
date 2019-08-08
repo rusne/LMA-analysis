@@ -112,7 +112,6 @@ nace_table_merged = pd.merge(tables, nace_table, how='left', left_on='NACE', rig
 nace_table_merged.drop(columns=['NACE', 'Digits'], inplace=True)
 nace_table_merged.rename(columns={'NACE code': 'NACE'}, inplace=True)
 tables = nace_table_merged.copy()
-tables.to_excel('tables.xlsx')
 
 # check if all nace codes have been found
 no_nace = tables[tables['NACE'] == np.NaN]
@@ -142,3 +141,12 @@ orbis_all = pd.concat([orbis_by_nace, orbis_by_name])
 orbis_all.drop_duplicates(subset=['BvDid'], inplace=True)
 
 orbis_all.to_excel(OutputFolder + "ORBIS_all.xlsx", encoding='utf-8', index=False)
+
+# print some statistics
+nace_count = len(orbis_by_nace.index)
+name_count = len(orbis_by_name.index)
+all_count = len(orbis_all.index)
+
+print nace_count, 'actors have been selected by relevant NACE codes'
+print name_count, 'actors have been found usinf batch search'
+print all_count, 'actors make up the final set of ORBIS actors'

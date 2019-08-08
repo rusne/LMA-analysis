@@ -8,11 +8,11 @@ import warnings #ignore unnecessary warnings
 warnings.simplefilter(action = "ignore", category = FutureWarning)
 pd.options.mode.chained_assignment = None
 
-#_________________________________________________
+# _________________________________________________
 
-# 0.a )  C H O O S I N G   P R O J E C T
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# 1 )  C H O O S I N G   P R O J E C T   A N D   S C O P E
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
 #choose PROJECT: REPAiR or CINDERELA
 while True:
@@ -26,13 +26,6 @@ while True:
     else:
         print 'Wrong choice.'
 
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-
-# 0.b )  R E A D I N G   F I L E S
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-
 #choose scope: Food Waste or Construction & Demolition Waste
 while True:
     scope = raw_input('Choose scope: CDW or FW\n')
@@ -40,6 +33,14 @@ while True:
         break
     else:
         print 'Wrong choice.'
+
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+
+# 2 )  R E A D I N G   F I L E S
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+
 
 DataFolder = "{0}/LMA data".format(projectname)
 os.chdir(DataFolder) # change to Part 1 folder
@@ -53,13 +54,14 @@ Part1Folder = "Exports_{0}_part1/".format(scope)
 InputFolder = "Input_{0}_part2/".format(scope)
 
 
-#_________________________________________________________
- #0.C) Reading in the Actors
- #_________________________________________________________
+# _________________________________________________________
+# 1.a) Reading in the LMA Actor list with their roles
+# _________________________________________________________
 
 
 LMA_actors = pd.read_excel(Part1Folder + 'Export_LMA_actors.xlsx'.format(scope))
 
+# if any of the actors orginally did not have postcodes, read in the manually searched postcodes
 if 'Export_LMA_actors_without_postcode.xlsx' in os.listdir(Part1Folder):
     LMA_actors_w_postcode = pd.read_excel(InputFolder + 'Input_actors_without_postcode.xlsx'.format(scope))
 
@@ -76,10 +78,23 @@ if 'Export_LMA_actors_without_postcode.xlsx' in os.listdir(Part1Folder):
     if len(no_postcode.index) > 0:
         print 'WARNING! Not all LMA actors have a postcode'
 
-LMA_actors.replace(np.NaN, '',inplace=True) #data cleaning
+# LMA_actors.replace(np.NaN, '',inplace=True) #data cleaning
 
 # create a unique key for LMA actors: Name + Postcode
 LMA_actors['LMA_key'] = LMA_actors['Name'] + ' ' + LMA_actors['Postcode']
+
+# _________________________________________________________
+# 1.b) Reading in the ORBIS batch search results
+# _________________________________________________________
+
+ORBIS_by_name = pd.read_excel(InputFolder + '/ORBIS_by_name.xlsx'.format(scope))
+
+# _________________________________________________________
+# 1.c) Reading in all the ORBIS actors chosen by NACE codes for address matching
+# _________________________________________________________
+
+ORBIS_all = pd.read_excel(InputFolder + 'ORBIS_all.xlsx'.format(scope))
+
 
 #________________________________________________________________________________________________________________________________
 #________________________________________________________________________________________________________________________________
@@ -107,234 +122,271 @@ def chain_order(role):
 
 
 def give_nace(role):
-    nace_by_role = {'ontdoener': 'WU-0004',
-                    'inzamelaar': 'WU-0005',
-                    'ontvanger': 'WU-0006',
-                    'verwerker': 'WU-0007'}
+    nace_by_role = {'ontdoener': 'WP-0004',
+                    'inzamelaar': 'WT-0005',
+                    'ontvanger': 'WT-0006',
+                    'verwerker': 'WT-0007'}
     return nace_by_role[role]
 
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-# 3 a & b & c )  C O N N E C T I N G   O R B I S    W I T H    L M A
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-#######
-# STEP 3 a
-#######
 
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
-#_________________________________________________________
-#       a) For connecting the LMA database with the Orbis exports based on company name
-#_________________________________________________________
+# 3 )  C O N N E C T I N G   A C T O R S
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
+# BY NAME
+lma_key_role_postcode = LMA_actors[['LMA_key', 'Name', 'who']]
+matched_by_name = pd.merge(lma_key_role_postcode, ORBIS_by_name,
+                           left_on='Name', right_on='LMA Name', how='right')
 
-ORBIS_by_name = pd.read_excel(InputFolder + '/ORBIS_by_name.xlsx'.format(scope))
+matched_by_name = matched_by_name[['LMA_key', 'who', 'name', 'Postcode',
+                                   'BvDid', 'NACE', 'Year']]
 
-# ORBIS_by_name = ORBIS_by_name[['Company name', 'Matched bvdid']]
-# ORBIS_by_name.rename(columns={'Company name': 'Name', 'Matched bvdid': 'BvDid'}, inplace=True)
-#
-# # data cleaning
-# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.upper()
-# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('BV', '')
-# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('B.V.', '')
-# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.strip()
-# ORBIS_by_name.drop_duplicates(subset= 'Name', inplace = True)
-#
-# # Merge Orbis export based on batch search in ORBIS with the overall database
-# ORBIS_by_name_wNACE = pd.merge(ORBIS_by_name, ORBIS_all, on=['BvDid'], how='inner', validate='m:1')
-# ORBIS_by_name_wNACE.replace(np.NaN, '',inplace=True)  # data cleaning
-# ORBIS_by_name_wNACE.rename(columns={'ORBIS_name': 'ORBIS_name_by_name',
-#                                    'Postcode': 'ORBIS_postcode', 'City': 'ORBIS_city', 'Huisnr': 'ORBIS_huisnr',
-#                                    'NACE': 'NACE_by_name', 'Year': 'Year_by_name'}, inplace=True)
+# BY ADDRESS
+LMA_actors['Huisnr'] = LMA_actors['Huisnr'].fillna(-999)
+LMA_actors['Huisnr'] = LMA_actors['Huisnr'].astype(int)  # avoid float-ization
+lma_key_role_address = LMA_actors[['LMA_key', 'Name', 'who', 'Postcode', 'Huisnr']]
+lma_key_role_address['address_key'] = lma_key_role_address['Postcode'] + ' ' + lma_key_role_address['Huisnr'].astype(str)
 
-ORBIS_by_name_wNACE = ORBIS_by_name[['name', 'BvDid', 'Postcode', 'Huisnummer', 'NACE', 'Year', 'LMA Name']]
-
-#data cleaning
-ORBIS_by_name_wNACE['Postcode'] = ORBIS_by_name_wNACE['Postcode'].str.replace(' ','')
-ORBIS_by_name_wNACE['Postcode'] = ORBIS_by_name_wNACE['Postcode'].str.upper()
-
-ORBIS_by_name_wNACE['LMA_key'] = ORBIS_by_name_wNACE['LMA Name'] + ' ' + ORBIS_by_name_wNACE['Postcode']
-ORBIS_by_name_wNACE.rename(columns={'name': 'ORBIS_name_by_name',
-                              'Postcode': 'ORBIS_postcode', 'Huisnummer': 'ORBIS_huisnr',
-                              'NACE': 'NACE_by_name', 'Year': 'Year_by_name'}, inplace=True)
-
-#_________________________________________________________
-#       b) For connecting the LMA database with the Orbis exports based on address
-#_________________________________________________________
-
-
-#reading in the Actors Orbis data exported from the GDSE
-
-ORBIS_all = pd.read_excel(InputFolder + 'ORBIS_all.xlsx'.format(scope))
-ORBIS_all = ORBIS_all[['name', 'postcode', 'BvDid', 'nace', 'huisnummer', 'year']]
-
-#data cleaning
 ORBIS_all['postcode'] = ORBIS_all['postcode'].str.replace(' ','')
 ORBIS_all['postcode'] = ORBIS_all['postcode'].str.upper()
 
-ORBIS_all.rename(columns={'huisnummer':'Huisnr', 'postcode':'Postcode'},inplace=True)
+ORBIS_all['huisnummer'] = ORBIS_all['huisnummer'].fillna(-999)
+ORBIS_all['huisnummer'] = ORBIS_all['huisnummer'].astype(int)  # avoid float-ization
+ORBIS_all['address_key'] = ORBIS_all['postcode'] + ' ' + ORBIS_all['huisnummer'].astype(str)
 
-# override entries that do not have house number at all with 0
-ORBIS_all['Huisnr'].replace(np.NaN,0,inplace=True)
-# ORBIS_all = ORBIS_all[ORBIS_all['Huisnr']!=999999] #filter out the entries that do not have a housenumber assigned
-ORBIS_all['Huisnr'] = ORBIS_all['Huisnr'].astype(int)
-ORBIS_all.replace(np.NaN, '',inplace=True) #data cleaning
+matched_by_address = pd.merge(lma_key_role_address, ORBIS_all, on='address_key', how='left')
 
+matched_by_address = matched_by_address[['LMA_key', 'name', 'who', 'postcode',
+                                         'BvDid', 'nace', 'year']]
 
-# Merge LMA data with the Orbis export to connect the postcode, huisnummers with a BVDid to eventually get a NACE code per waste entry
-LMA_actors['Huisnr'] = pd.to_numeric(LMA_actors['Huisnr'], errors='coerce') #making sure the datatypes for Huisnummer is the same for the two merged dataframes
-LMA_Orbis_by_address = pd.merge(LMA_actors,ORBIS_all,on=['Postcode','Huisnr'],how='left')
+# merging both methods into one for the decision tree
+matched_by_name.rename(columns={'name': 'ORBIS_name_by_name',
+                                'BvDid': 'BvDid_by_name',
+                                'Postcode': 'Postcode_by_name',
+                                'NACE': 'NACE_by_name',
+                                'Year': 'Year_by_name'}, inplace=True)
 
-LMA_Orbis_by_address.rename(columns={'BvDid':'BvDid_by_address', 'nace':'NACE_by_address',
-                                     'postcode': 'LMA_postcode', 'Huisnr':'LMA_huisnr',
-                                     'name': 'ORBIS_name_by_address', 'Year':'Year_by_address'}, inplace=True)
-LMA_Orbis_by_address.drop_duplicates(inplace=True)
+matched_by_address.rename(columns={'name': 'ORBIS_name_by_address',
+                                   'BvDid': 'BvDid_by_address',
+                                   'postcode': 'Postcode_by_address',
+                                   'nace': 'NACE_by_address',
+                                   'year': 'Year_by_address'}, inplace=True)
 
-print LMA_Orbis_by_address.columns
-print ORBIS_by_name.columns
+matched = pd.merge(matched_by_address, matched_by_name, on=['LMA_key', 'who'], how='left')
 
-# Merge LMA data with ORBIS based on the batch search on company names in ORBIS
-actors_full_merge = pd.merge(LMA_Orbis_by_address, ORBIS_by_name_wNACE, on=['LMA_key'], how='left')
-actors_full_merge.replace(np.NaN, '', inplace=True)  # data cleaning
-actors_full_merge.rename(columns={'BvDid': 'BvDid_by_name'}, inplace=True)
-actors_full_merge.drop_duplicates(inplace=True)
+matched.replace(np.NaN, '',inplace=True) #data cleaning
 
-actors_full_merge.to_excel('actors_full_merge.xlsx')
-
-
-#_________________________________________________________
-#       c) Implement a decision tree for choosing the best match
-#_________________________________________________________
+# _________________________________________________________
+# 4) I M P L E M E N T I N G   A   D E C I S I O N   T R E E
+# _________________________________________________________
 
 total_count = len(LMA_actors)
 bvdindex = 0
 print total_count, "actors need to be matched"
 
-output_columns = ['LMA_key', 'Name',
-                  'Postcode', 'City', 'Street', 'Huisnr',
-                  'NACE', 'Role', 'BvDid']
+LMA_output_columns = ['LMA_key', 'Name',
+                      'Postcode', 'City', 'Address',
+                      'NACE', 'Role', 'BvDid',
+                      'Matched name', 'Matched postcode', 'Matched NACE',
+                      'Matched BvDid', 'Matched year', 'how']
 
+ORBIS_output_columns = ['BvDid', 'name', 'NACE', 'Code', 'Year', 'Description english',
+                        'Description original', 'BvDii', 'Website', 'Employess',
+                        'Turnover', 'Postcode', 'Address', 'City', 'Country', 'wkt']
+
+# _____________________________________________________________________
 # DECISION 1a: the same BvDid is found matching by name and by address
-confirmed_or_unmatched = actors_full_merge[actors_full_merge['BvDid_by_address'] == actors_full_merge['BvDid_by_name']]
+# _____________________________________________________________________
+
+confirmed_or_unmatched = matched[matched['BvDid_by_address'] == matched['BvDid_by_name']]
 
 confirmed = confirmed_or_unmatched[confirmed_or_unmatched['BvDid_by_address'] != '']
 confirmed_count = len(confirmed.index)
 print confirmed_count, 'actors have been confirmed'
 
-#output file 1a
-confirmed_output = confirmed[['LMA_key', 'Name',
-                              'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                              'NACE_by_address', 'who', 'BvDid_by_address']]
-confirmed_output.columns = output_columns
+#output part 1a
+shortlist = confirmed[['BvDid_by_name', 'LMA_key', 'who']]
+shortlist.rename(columns={'BvDid_by_name': 'BvDid'}, inplace=True)
 
+ORBIS_actors_output = pd.merge(shortlist, ORBIS_by_name, on=['BvDid'], how='left')
+
+confirmed_output = ORBIS_actors_output[['LMA_key', 'name',
+                              'Postcode', 'City', 'Address',
+                              'NACE', 'who', 'BvDid',
+                              'name', 'Postcode', 'NACE', 'BvDid', 'Year']]
+confirmed_output['how'] = '1a'
+confirmed_output.columns = LMA_output_columns
+confirmed_output.drop_duplicates(inplace=True)
+
+# output file for the GDSE actor table
+ORBIS_actors_output = ORBIS_actors_output[ORBIS_output_columns]
+ORBIS_actors_output.drop_duplicates(inplace=True)
+ORBIS_actors_output.to_excel(ExportFolder + 'Export_ORBIS_actors.xlsx')
+
+# _____________________________________________________________________
 # DECISION 1b: actor has not been matched neither by name nor address
+# _____________________________________________________________________
+
 unmatched = confirmed_or_unmatched[confirmed_or_unmatched['BvDid_by_address'] == '']
 unmatched_count = len(unmatched.index)
 print unmatched_count, 'actors have been unmatched'
 
 #output file 1b
-unmatched_output = unmatched[['LMA_key', 'Name',
-                              'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr', 'who']]
-
+shortlist = unmatched[['LMA_key', 'who']]
+unmatched_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
 
 unmatched_output.reset_index(drop=True, inplace=True)
-# unmatched_output['BvDid'] = 'LMA' + scope + unmatched_output.index.map(str).str.zfill(5)
 unmatched_output['BvDid'] = unmatched_output.index.map(int)
 unmatched_output['BvDid'] = unmatched_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-# unmatched_output.set_index('Index', drop=True, inplace=True)
 bvdindex += len(unmatched_output.index)
 
 unmatched_output['NACE'] = unmatched_output['who'].apply(give_nace)
-unmatched_output = unmatched_output[['LMA_key', 'Name',
-                              'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr', 'NACE', 'who', 'BvDid']]
-unmatched_output.columns = output_columns
+unmatched_output['Address'] = unmatched_output['Straat'] + ' ' + unmatched_output['Huisnr'].astype(str)
+unmatched_output = unmatched_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                     'Address', 'NACE', 'who', 'BvDid']]
+unmatched_output['Matched name'] = ''
+unmatched_output['Matched postcode'] = ''
+unmatched_output['Matched NACE'] = ''
+unmatched_output['Matched BvDid'] = ''
+unmatched_output['Matched year'] = ''
+unmatched_output['how'] = '1b'
+unmatched_output.columns = LMA_output_columns
+
 
 # take out those actors that had been confirmed or unmatched
-actors_step2 = actors_full_merge[(actors_full_merge['LMA_key'].str.cat(actors_full_merge['who']).isin(confirmed_or_unmatched['LMA_key'].str.cat(confirmed_or_unmatched['who'])) == False)]
+matched_step2 = matched[(matched['LMA_key'].str.cat(matched['who']).isin(confirmed_or_unmatched['LMA_key'].str.cat(confirmed_or_unmatched['who'])) == False)]
 
+# __________________________________________________________________________________
 # DECISION 2a: actor has been matched to only one BvDid by address, nothing by name
-actors_step2['freq'] = actors_step2.groupby(['LMA_key', 'who'])['LMA_key'].transform('count')
-single_match = actors_step2[actors_step2['freq'] == 1]
+# __________________________________________________________________________________
+
+matched_step2['freq'] = matched_step2.groupby(['LMA_key', 'who'])['LMA_key'].transform('count')
+single_match = matched_step2[matched_step2['freq'] == 1]
 
 by_address = single_match[single_match['BvDid_by_name'] == '']
 by_address_count = len(by_address.index)
 print by_address_count, "actors have been matched only by address"
 
 #output file 2a
-by_address_output = by_address[['LMA_key', 'Name',
-                              'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                              'NACE_by_address', 'who']]
+shortlist = by_address[['LMA_key', 'who', 'NACE_by_address',
+                        'ORBIS_name_by_address', 'Postcode_by_address',
+                        'BvDid_by_address', 'Year_by_address']]
+by_address_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
 
 by_address_output.reset_index(drop=True, inplace=True)
 by_address_output['BvDid'] = by_address_output.index.map(int)
 by_address_output['BvDid'] = by_address_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
 bvdindex += len(by_address_output.index)
 
-by_address_output.columns = output_columns
+by_address_output['Address'] = by_address_output['Straat'] + ' ' + by_address_output['Huisnr'].astype(str)
+by_address_output = by_address_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                       'Address', 'NACE_by_address', 'who', 'BvDid',
+                                       'ORBIS_name_by_address', 'Postcode_by_address',
+                                       'NACE_by_address', 'BvDid_by_address', 'Year_by_address']]
+by_address_output['how'] = '2a'
+by_address_output.columns = LMA_output_columns
 
+# __________________________________________________________________________________
 # DECISION 2b: actor has been matched to only one BvDid by name, nothing by address
+# __________________________________________________________________________________
+
 by_name = single_match[single_match['BvDid_by_address'] == '']
 by_name_count = len(by_name.index)
 print by_name_count, "actors have been matched only by name"
 
 #output file 2b
-by_name_output = by_name[['LMA_key', 'Name',
-                          'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                          'NACE_by_name', 'who']]
+shortlist = by_name[['LMA_key', 'who', 'NACE_by_name',
+                     'ORBIS_name_by_name', 'Postcode_by_name',
+                     'BvDid_by_name', 'Year_by_name']]
+by_name_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
 
 by_name_output.reset_index(drop=True, inplace=True)
 by_name_output['BvDid'] = by_name_output.index.map(int)
 by_name_output['BvDid'] = by_name_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
 bvdindex += len(by_name_output.index)
 
-by_name_output.columns = output_columns
+by_name_output['Address'] = by_name_output['Straat'] + ' ' + by_name_output['Huisnr'].astype(str)
+by_name_output = by_name_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                 'Address', 'NACE_by_name', 'who', 'BvDid',
+                                 'ORBIS_name_by_name', 'Postcode_by_name',
+                                 'NACE_by_name', 'BvDid_by_name', 'Year_by_name']]
+by_name_output['how'] = '2b'
 
+by_name_output.columns = LMA_output_columns
+
+# ____________________________________________________________________________________
 # DECISION 2c: actor has been matched by both name and address but to different actors
+# ____________________________________________________________________________________
+
 by_name_and_address = single_match[(single_match['BvDid_by_name'] != '') & (single_match['BvDid_by_address'] != '')]
 by_name_and_address_count = len(by_name_and_address.index)
 print by_name_and_address_count, "actors have been matched by name and address to different entities"
 
-by_name_and_address_a = by_name_and_address[by_name_and_address['Year_by_address'] >= by_name_and_address['Year_by_name']]
-by_name_and_address_n = by_name_and_address[by_name_and_address['Year_by_address'] < by_name_and_address['Year_by_name']]
+by_na_same_nace = by_name_and_address[by_name_and_address['NACE_by_name'] == by_name_and_address['NACE_by_address']]
+by_na_same_nace_count = len(by_na_same_nace.index)
+print by_na_same_nace_count, "of them still have the same NACE code"
 
-#output file 2c
-by_a_output = by_name_and_address_a[['LMA_key', 'Name',
-                                     'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                                     'NACE_by_address', 'who']]
-by_n_output = by_name_and_address_n[['LMA_key', 'Name',
-                                     'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                                     'NACE_by_name', 'who']]
+by_na_diff_nace = by_name_and_address[by_name_and_address['NACE_by_name'] != by_name_and_address['NACE_by_address']]
 
-by_a_output.reset_index(drop=True, inplace=True)
-by_a_output['BvDid'] = by_a_output.index.map(int)
-by_a_output['BvDid'] = by_a_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-bvdindex += len(by_a_output.index)
+by_name_and_address_a = by_na_diff_nace[by_na_diff_nace['Year_by_address'] > by_na_diff_nace['Year_by_name']]
+by_name_and_address_n = by_na_diff_nace[by_na_diff_nace['Year_by_address'] <= by_na_diff_nace['Year_by_name']]
 
-by_n_output.reset_index(drop=True, inplace=True)
-by_n_output['BvDid'] = by_n_output.index.map(int)
-by_n_output['BvDid'] = by_n_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-bvdindex += len(by_n_output.index)
+# output file 2c
+shortlist_na = by_na_same_nace[['LMA_key', 'who', 'NACE_by_name',
+                                'ORBIS_name_by_name', 'Postcode_by_name',
+                                'BvDid_by_name', 'Year_by_name']]
+shortlist_a = by_name_and_address_a[['LMA_key', 'who', 'NACE_by_address',
+                                     'ORBIS_name_by_address', 'Postcode_by_address',
+                                     'BvDid_by_address', 'Year_by_address']]
+shortlist_n = by_name_and_address_n[['LMA_key', 'who', 'NACE_by_name',
+                                     'ORBIS_name_by_name', 'Postcode_by_name',
+                                     'BvDid_by_name', 'Year_by_name']]
+col = ['LMA_key', 'who', 'NACE', 'matched name', 'matched postcode', 'matched bvdid', 'matched_year']
+shortlist_na.columns = col
+shortlist_a.columns = col
+shortlist_n.columns = col
+shortlist = pd.concat([shortlist_na, shortlist_a, shortlist_n])
 
-by_a_output.columns = output_columns
-by_n_output.columns = output_columns
-by_name_and_address_output = pd.concat([by_a_output, by_n_output])
 
+by_name_and_address_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
+
+by_name_and_address_output.reset_index(drop=True, inplace=True)
+by_name_and_address_output['BvDid'] = by_name_and_address_output.index.map(int)
+by_name_and_address_output['BvDid'] = by_name_and_address_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
+bvdindex += len(by_name_and_address_output.index)
+
+by_name_and_address_output['Address'] = by_name_and_address_output['Straat'] + ' ' + by_name_and_address_output['Huisnr'].astype(str)
+by_name_and_address_output = by_name_and_address_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                                         'Address', 'NACE', 'who', 'BvDid',
+                                                         'matched name', 'matched postcode',
+                                                         'NACE', 'matched bvdid', 'matched_year']]
+by_name_and_address_output['how'] = '2c'
+by_name_and_address_output.columns = LMA_output_columns
 
 # take out those actors that had been matched
-actors_step3 = actors_step2[(actors_step2['freq'] != 1)]
+matched_step3 = matched_step2[(matched_step2['freq'] != 1)]
 
+# _________________________________________________________________________
 # DECISION 3: actor has been matched to multiple others by name and address
+# _________________________________________________________________________
+
+# actors are different by name and address but NACE code is the same
+
 
 # all possibilities are equal, therefore the dataframe needs to be reorganised vertically
-step3_a = actors_step3[['LMA_key', 'Name',
-                        'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                        'NACE_by_address', 'who', 'BvDid_by_address', 'Year_by_address']]
-step3_n = actors_step3[['LMA_key', 'Name',
-                        'LMA_postcode', 'LMA_plaats', 'LMA_straat', 'LMA_huisnr',
-                        'NACE_by_name', 'who', 'BvDid_by_name', 'Year_by_name']]
+step3_a = matched_step3[['LMA_key', 'who', 'ORBIS_name_by_address', 'Postcode_by_address',
+                         'BvDid_by_address', 'NACE_by_address', 'Year_by_address']]
+step3_a['how'] = 'by address'
+step3_n = matched_step3[['LMA_key', 'who', 'ORBIS_name_by_name', 'Postcode_by_name',
+                         'BvDid_by_name', 'NACE_by_name', 'Year_by_name']]
+step3_n['how'] = 'by name'
 step3_n = step3_n[step3_n['BvDid_by_name'] != '']
-step3_a.columns = output_columns + ['Year']
-step3_n.columns = output_columns + ['Year']
+col = ['LMA_key', 'who', 'ORBIS_name', 'ORBIS_Postcode', 'ORBIS_BvDid', 'NACE', 'Year', 'how']
+step3_a.columns = col
+step3_n.columns = col
 
 step3 = pd.concat([step3_a, step3_n])
 step3.drop_duplicates(inplace=True)
@@ -342,21 +394,67 @@ step3['Year'].replace('', '0', inplace=True)
 step3['Year'] = step3['Year'].astype(int)
 step3.reset_index(drop=True, inplace=True)
 
-ambiguous_match = step3.loc[step3.groupby(['LMA_key', 'Role'])['Year'].idxmax()]
-ambiguous_export = pd.merge(actors_step3, ambiguous_match[['LMA_key', 'BvDid']], how='left', on='LMA_key')
-ambiguous_export.to_excel('Exports_{0}_part2/actors_matched_ambiguously.xlsx'.format(scope))
+step3.to_excel(ExportFolder + 'actors_matched_ambiguously.xlsx')
 
-print len(ambiguous_match), "have been matched ambiguously"
+# _________________________________________________________________________
+# DECISION 3a: actor has been matched to multiple others but they all have the same NACE
+# _________________________________________________________________________
 
-# output file 3
-ambiguous_match_output = ambiguous_match[output_columns]
+step3['NACE_options'] = step3.groupby(['LMA_key', 'who'])['NACE'].transform('nunique')
+same_NACE = step3[step3['NACE_options'] == 1]
+same_NACE.drop_duplicates(subset=['LMA_key', 'who', 'NACE'], inplace=True)
 
-ambiguous_match_output.reset_index(drop=True, inplace=True)
-ambiguous_match_output['BvDid'] = ambiguous_match_output.index.map(int)
-ambiguous_match_output['BvDid'] = ambiguous_match_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-bvdindex += len(ambiguous_match_output.index)
+same_NACE_count = len(same_NACE.index)
+print same_NACE_count, 'actors have been matched to multiple entities but all of the same NACE code'
 
-unconfirmed_output = pd.concat([unmatched_output, by_address_output, by_name_output, by_name_and_address_output, ambiguous_match_output])
+# output file 3a
+shortlist = same_NACE[['LMA_key', 'who', 'NACE', 'ORBIS_name', 'ORBIS_Postcode', 'ORBIS_BvDid', 'Year']]
+by_nace_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
+
+by_nace_output.reset_index(drop=True, inplace=True)
+by_nace_output['BvDid'] = by_nace_output.index.map(int)
+by_nace_output['BvDid'] = by_nace_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
+bvdindex += len(by_nace_output.index)
+
+by_nace_output['Address'] = by_nace_output['Straat'] + ' ' + by_nace_output['Huisnr'].astype(str)
+by_nace_output = by_nace_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                 'Address', 'NACE', 'who', 'BvDid',
+                                 'ORBIS_name', 'ORBIS_Postcode', 'NACE', 'ORBIS_BvDid', 'Year']]
+by_nace_output['how'] = '3a'
+by_nace_output.columns = LMA_output_columns
+
+# _________________________________________________________________________
+# DECISION 3b: actor has been matched to multiple others but they all have different NACE
+# _________________________________________________________________________
+
+step3 = step3[step3['NACE_options'] != 1]
+
+ambiguous_match = step3.loc[step3.groupby(['LMA_key', 'who'])['Year'].idxmax()]
+ambiguous_match_count = len(ambiguous_match.index)
+print ambiguous_match_count, "have been matched ambiguously"
+
+# output file 3b
+shortlist = ambiguous_match[['LMA_key', 'who', 'NACE', 'ORBIS_name', 'ORBIS_Postcode', 'ORBIS_BvDid', 'Year']]
+ambiguous_output = pd.merge(shortlist, LMA_actors, on=['LMA_key', 'who'], how='left')
+
+ambiguous_output.reset_index(drop=True, inplace=True)
+ambiguous_output['BvDid'] = ambiguous_output.index.map(int)
+ambiguous_output['BvDid'] = ambiguous_output['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
+bvdindex += len(ambiguous_output.index)
+
+ambiguous_output['Address'] = ambiguous_output['Straat'] + ' ' + ambiguous_output['Huisnr'].astype(str)
+ambiguous_output = ambiguous_output[['LMA_key', 'Name', 'Postcode', 'Plaats',
+                                     'Address', 'NACE', 'who', 'BvDid',
+                                     'ORBIS_name', 'ORBIS_Postcode', 'NACE', 'ORBIS_BvDid', 'Year']]
+ambiguous_output['how'] = '3b'
+ambiguous_output.columns = LMA_output_columns
+
+# _________________________________________________________________________
+# N A C E    C O N S T R A I N T S
+# _________________________________________________________________________
+
+unconfirmed_output = pd.concat([unmatched_output, by_address_output, by_name_output, by_name_and_address_output, by_nace_output, ambiguous_output])
+print 'unconfirmed_output:', len(unconfirmed_output.index)
 
 # CONSTRAINT 1:
     # ontdoener can have any NACE,
@@ -369,61 +467,17 @@ actors_constraint1 = unconfirmed_output[unconfirmed_output['Role'] != 'ontdoener
 actors_constraint1 = actors_constraint1[actors_constraint1['NACE'].str.startswith('E') == False]
 actors_constraint1 = actors_constraint1[actors_constraint1['NACE'].str.startswith('H') == False]
 
+# exclude constrained subset from all the uncofirmed actors
 actors_no_constraint1 = pd.concat([actors_constraint1, unconfirmed_output]).drop_duplicates(keep=False)
 
 actors_constraint1['NACE'] = actors_constraint1['Role'].apply(give_nace)
 
 all_actors = pd.concat([confirmed_output, actors_no_constraint1, actors_constraint1])
-
-# CONSTRAINT 2: if the same BvDid refers to actors that have different postcodes, then a new BvDid must be given to those actors keeping the same NACE
-actors_constraint2 = all_actors.copy()
-actors_constraint2['freq_bvd'] = actors_constraint2.groupby('BvDid')['BvDid'].transform('count')
-actors_constraint2['freq_pc'] = actors_constraint2.groupby(['BvDid', 'Postcode'])['Postcode'].transform('count')
-
-actors_no_constraint2 = actors_constraint2[actors_constraint2['freq_bvd'] == actors_constraint2['freq_pc']]
-actors_constraint2 = actors_constraint2[actors_constraint2['freq_bvd'] != actors_constraint2['freq_pc']]
-print len(actors_constraint2), "actors have been mapped to a BvDid that already has a company assigned to a different address"
-
-group_vars = ['BvDid', 'Postcode']
-actors_original2 = actors_constraint2.loc[actors_constraint2.groupby('BvDid')['Postcode'].idxmin()]
-
-actors_reidentified = pd.concat([actors_constraint2, actors_original2]).drop_duplicates(keep=False)
-
-actors_reidentified.reset_index(drop=True, inplace=True)
-actors_reidentified['BvDid'] = actors_reidentified.index.map(int)
-actors_reidentified['BvDid'] = actors_reidentified['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-bvdindex += len(actors_reidentified.index)
-
-actors_cleaned = pd.concat([actors_no_constraint2, actors_original2, actors_reidentified])
-actors_cleaned = actors_cleaned[output_columns]
-
-# CONSTRAINT 3: if the same BvDid refers to actors that have different roles, then a new BvDid must be given to those actors keeping the same NACE
-actors_constraint3 = actors_cleaned.copy()
-actors_constraint3['freq_bvd'] = actors_constraint3.groupby('BvDid')['BvDid'].transform('count')
-actors_constraint3['freq_rl'] = actors_constraint3.groupby(['BvDid', 'Role'])['Role'].transform('count')
-
-actors_no_constraint3 = actors_constraint3[actors_constraint3['freq_bvd'] == actors_constraint3['freq_rl']]
-actors_constraint3 = actors_constraint3[actors_constraint3['freq_bvd'] != actors_constraint3['freq_rl']]
-print len(actors_constraint3), "actors have been mapped to a BvDid that already has a company assigned to a different role"
-
-actors_constraint3['Chain_order'] = actors_constraint3['Role'].apply(chain_order)
-
-group_vars = ['BvDid', 'Chain_order']
-actors_original3 = actors_constraint3.loc[actors_constraint3.groupby('BvDid')['Chain_order'].idxmin()]
-
-actors_reidentified = pd.concat([actors_constraint3, actors_original3]).drop_duplicates(keep=False)
-
-actors_reidentified.reset_index(drop=True, inplace=True)
-actors_reidentified['BvDid'] = actors_reidentified.index.map(int)
-actors_reidentified['BvDid'] = actors_reidentified['BvDid'].apply(give_bvdid, scope=scope, start_bvd=bvdindex)
-bvdindex += len(actors_reidentified.index)
-
-actors_matched = pd.concat([actors_no_constraint3, actors_original3, actors_reidentified])
-actors_matched = actors_matched[output_columns]
+print 'all_actors:', len(all_actors.index)
 
 # export the final list of actors
 
-actors_matched.to_excel('Exports_{0}_part2/actors_matched.xlsx'.format(scope))
+all_actors.to_excel(ExportFolder + 'Export_LMA_all_actors.xlsx')
 
 #_____________________________________________________________________________
 #_____________________________________________________________________________
@@ -431,8 +485,7 @@ actors_matched.to_excel('Exports_{0}_part2/actors_matched.xlsx'.format(scope))
 #_____________________________________________________________________________
 #_____________________________________________________________________________
 
-new_actors = pd.concat([actors_reidentified, unmatched_output])
-new_actors.drop_duplicates(subset=['BvDid'], inplace=True)
+new_actors = unconfirmed_output.copy()
 # the unknown fields are filled with empty cells
 new_actors['code'] = ''
 new_actors['year'] = 2016
@@ -454,9 +507,31 @@ new_actors.to_excel('Exports_{0}_part2/Export_LMA_actors.xlsx'.format(scope))
 #_____________________________________________________________________________
 #_____________________________________________________________________________
 
-locations = actors_matched.copy()
-locations['Address'] = locations['Street'].map(str) + ' ' + locations['Huisnr'].map(str)
+locations = all_actors.copy()
 locations = locations[['BvDid', 'Postcode', 'Address', 'City']]
-locations.drop_duplicates(subset=['BvDid', 'Postcode'], inplace=True)
+locations.drop_duplicates(subset=['BvDid'], inplace=True)
 
-locations.to_excel('Exports_{0}_part2/Export_LMA_actors_locations.xlsx'.format(scope))
+locations.to_excel(ExportFolder +'Export_LMA_actors_locations.xlsx')
+
+
+#_____________________________________________________________________________
+#_____________________________________________________________________________
+#  A C T I V I T Y  &  A C T I V I T Y   G R O U P   T A B L E S
+#_____________________________________________________________________________
+#_____________________________________________________________________________
+
+activities = all_actors[['NACE']]
+activities.drop_duplicates(inplace=True)
+
+nace_table = pd.read_excel('NACE_table.xlsx'.format(projectname))
+nace_table.rename(columns={'Code':'NACE'}, inplace=True)
+nace_table_merged = pd.merge(activities, nace_table, how='left', on='NACE')
+
+activity_table = nace_table_merged[['NACE', 'Name', 'AG code']]
+activity_table.columns = ['NACE', 'Name', 'AG']
+activity_table.to_excel(ExportFolder + 'Export_LMA_activities.xlsx')
+
+activity_group_table = nace_table_merged[['AG code', 'Activity Group']]
+activity_group_table.drop_duplicates(inplace=True)
+activity_group_table.columns = ['Code', 'Name']
+activity_group_table.to_excel(ExportFolder + 'Export_LMA_activity_groups.xlsx')
