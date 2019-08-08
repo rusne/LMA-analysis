@@ -185,9 +185,9 @@ AMA_cities.drop_duplicates(inplace=True) #cleaning data
 # now AMA_cities is a table with all the Herkomst cities and whether they are in the AMA or not AMA = Ja or empty
 # used later
 
-eural = total_AMA['EuralCode']
-eural.drop_duplicates(inplace=True)
-eural.to_excel("eural.xlsx")
+# eural = total_AMA['EuralCode']
+# eural.drop_duplicates(inplace=True)
+# eural.to_excel("eural.xlsx")
 
 #_________________________________________________________
 #       b) For connecting the EuralCode selections and attributes
@@ -463,18 +463,24 @@ verwerker.columns = ['Name', 'Postcode', 'Plaats', 'Straat', 'Huisnr', 'who']
 
 actors = pd.concat([herkomst, inzamelaar, ontvanger, verwerker])
 
+
+def clean_white_space(string):
+    return ' '.join(string.split())
+
 #data cleaning
 actors['Postcode'] = actors['Postcode'].str.replace(' ','')
 actors['Postcode'] = actors['Postcode'].str.upper()
 actors['Name'] = actors['Name'].str.upper()
 actors['Name'] = actors['Name'].str.replace('BV', '')
 actors['Name'] = actors['Name'].str.replace('B.V.', '')
-actors['Name'] = actors['Name'].str.strip()
-actors['Name'] = actors['Name'].str.upper()
+actors['Name'] = actors['Name'].str.replace('B.V.', '')
+actors['Name'] = actors['Name'].apply(clean_white_space)
 actors['Plaats'] = actors['Plaats'].str.strip()
 actors['Plaats'] = actors['Plaats'].str.upper()
+actors['Plaats'] = actors['Plaats'].apply(clean_white_space)
 actors['Straat'] = actors['Straat'].str.strip()
 actors['Straat'] = actors['Straat'].str.upper()
+actors['Straat'] = actors['Straat'].apply(clean_white_space)
 
 
 actors.drop_duplicates(subset=['Name', 'Postcode', 'who'], inplace=True)
@@ -497,6 +503,8 @@ roles.to_excel('actor_roles_summary.xlsx')
 actors.to_excel('Export_LMA_actors.xlsx')
 
 actors_without_postcode = actors[actors['Postcode'] == '']
+
+
 # actors_with_postcode = actors[actors['Postcode'] != '']
 #
 # actors_with_postcode.to_excel('Export_LMA_actors.xlsx')

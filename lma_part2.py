@@ -41,32 +41,45 @@ while True:
     else:
         print 'Wrong choice.'
 
-
-Exportfolder = "{0}/LMA data/Exports_{1}_part2".format(projectname, scope)
-if not os.path.exists(Exportfolder): # create folder if it does not exist
-    os.makedirs(Exportfolder)
-
 DataFolder = "{0}/LMA data".format(projectname)
 os.chdir(DataFolder) # change to Part 1 folder
 
-#_________________________________________________________
-# 0.c) M O D E L L I N G   V A R I A B L E S
-#_________________________________________________________
+ExportFolder = "Exports_{0}_part2/".format(scope)
+if not os.path.exists(ExportFolder): # create folder if it does not exist
+    os.makedirs(ExportFolder)
+
+Part1Folder = "Exports_{0}_part1/".format(scope)
+
+InputFolder = "Input_{0}_part2/".format(scope)
+
 
 #_________________________________________________________
- #0.C) Reading in the Comprehensive table from Part 1
+ #0.C) Reading in the Actors
  #_________________________________________________________
 
-# LMA = pd.read_excel('Exports_{0}_part1/Export_LMA_Analysis_comprehensive_part1.xlsx'.format(scope))
-LMA_actors = pd.read_excel('Exports_{0}_part1/Export_LMA_actors.xlsx'.format(scope))
-LMA_actors_w_postcode = pd.read_excel('Exports_{0}_part1/Export_LMA_actors.xlsx'.format(scope))
+
+LMA_actors = pd.read_excel(Part1Folder + 'Export_LMA_actors.xlsx'.format(scope))
+
+if 'Export_LMA_actors_without_postcode.xlsx' in os.listdir(Part1Folder):
+    LMA_actors_w_postcode = pd.read_excel(InputFolder + 'Input_actors_without_postcode.xlsx'.format(scope))
+
+    # check if actor file is older than the postcode file - if not, give a warning as indexes might not match
+    t1 = os.path.getctime('Exports_{0}_part1/Export_LMA_actors.xlsx'.format(scope))
+    t2 = os.path.getctime('Exports_{0}_part1/Input_actors_without_postcode.xlsx'.format(scope))
+    print t1
+    print t2
+    if t1 < t2:
+        print 'WARNING! Your part1 exports are newer than other input files, make sure they are all up to date'
+
+    LMA_actors.update(LMA_actors_w_postcode)
+    no_postcode = LMA_actors[LMA_actors['Postcode'] == np.NaN]
+    if len(no_postcode.index) > 0:
+        print 'WARNING! Not all LMA actors have a postcode'
 
 LMA_actors.replace(np.NaN, '',inplace=True) #data cleaning
 
 # create a unique key for LMA actors: Name + Postcode
 LMA_actors['LMA_key'] = LMA_actors['Name'] + ' ' + LMA_actors['Postcode']
-
-LMA_actors.to_excel('lma_key.xlsx')
 
 #________________________________________________________________________________________________________________________________
 #________________________________________________________________________________________________________________________________
@@ -109,22 +122,57 @@ def give_nace(role):
 # STEP 3 a
 #######
 
+
 #_________________________________________________________
-#       a) For connecting the LMA database with the Orbis exports based on address
+#       a) For connecting the LMA database with the Orbis exports based on company name
+#_________________________________________________________
+
+
+ORBIS_by_name = pd.read_excel(InputFolder + '/ORBIS_by_name.xlsx'.format(scope))
+
+# ORBIS_by_name = ORBIS_by_name[['Company name', 'Matched bvdid']]
+# ORBIS_by_name.rename(columns={'Company name': 'Name', 'Matched bvdid': 'BvDid'}, inplace=True)
+#
+# # data cleaning
+# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.upper()
+# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('BV', '')
+# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('B.V.', '')
+# ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.strip()
+# ORBIS_by_name.drop_duplicates(subset= 'Name', inplace = True)
+#
+# # Merge Orbis export based on batch search in ORBIS with the overall database
+# ORBIS_by_name_wNACE = pd.merge(ORBIS_by_name, ORBIS_all, on=['BvDid'], how='inner', validate='m:1')
+# ORBIS_by_name_wNACE.replace(np.NaN, '',inplace=True)  # data cleaning
+# ORBIS_by_name_wNACE.rename(columns={'ORBIS_name': 'ORBIS_name_by_name',
+#                                    'Postcode': 'ORBIS_postcode', 'City': 'ORBIS_city', 'Huisnr': 'ORBIS_huisnr',
+#                                    'NACE': 'NACE_by_name', 'Year': 'Year_by_name'}, inplace=True)
+
+ORBIS_by_name_wNACE = ORBIS_by_name[['name', 'BvDid', 'Postcode', 'Huisnummer', 'NACE', 'Year', 'LMA Name']]
+
+#data cleaning
+ORBIS_by_name_wNACE['Postcode'] = ORBIS_by_name_wNACE['Postcode'].str.replace(' ','')
+ORBIS_by_name_wNACE['Postcode'] = ORBIS_by_name_wNACE['Postcode'].str.upper()
+
+ORBIS_by_name_wNACE['LMA_key'] = ORBIS_by_name_wNACE['LMA Name'] + ' ' + ORBIS_by_name_wNACE['Postcode']
+ORBIS_by_name_wNACE.rename(columns={'name': 'ORBIS_name_by_name',
+                              'Postcode': 'ORBIS_postcode', 'Huisnummer': 'ORBIS_huisnr',
+                              'NACE': 'NACE_by_name', 'Year': 'Year_by_name'}, inplace=True)
+
+#_________________________________________________________
+#       b) For connecting the LMA database with the Orbis exports based on address
 #_________________________________________________________
 
 
 #reading in the Actors Orbis data exported from the GDSE
 
-ORBIS_all = pd.read_excel('Exports_{0}_part1/ORBIS_all.xlsx'.format(scope))
-ORBIS_all = ORBIS_all[['Name', 'Postcode', 'BvDid', 'NACE', 'City', 'Huisnummer', 'Year']]
-
+ORBIS_all = pd.read_excel(InputFolder + 'ORBIS_all.xlsx'.format(scope))
+ORBIS_all = ORBIS_all[['name', 'postcode', 'BvDid', 'nace', 'huisnummer', 'year']]
 
 #data cleaning
-ORBIS_all['Postcode'] = ORBIS_all['Postcode'].str.replace(' ','')
-ORBIS_all['Postcode'] = ORBIS_all['Postcode'].str.upper()
+ORBIS_all['postcode'] = ORBIS_all['postcode'].str.replace(' ','')
+ORBIS_all['postcode'] = ORBIS_all['postcode'].str.upper()
 
-ORBIS_all.rename(columns={'Huisnummer':'Huisnr', 'Name':'ORBIS_name'},inplace=True)
+ORBIS_all.rename(columns={'huisnummer':'Huisnr', 'postcode':'Postcode'},inplace=True)
 
 # override entries that do not have house number at all with 0
 ORBIS_all['Huisnr'].replace(np.NaN,0,inplace=True)
@@ -132,50 +180,26 @@ ORBIS_all['Huisnr'].replace(np.NaN,0,inplace=True)
 ORBIS_all['Huisnr'] = ORBIS_all['Huisnr'].astype(int)
 ORBIS_all.replace(np.NaN, '',inplace=True) #data cleaning
 
-# BVDid_NACE_postcode_huisnr=BVDid_NACE_postcode_huisnr.reset_index() #EDITED
-# del BVDid_NACE_postcode_huisnr['index'] #EDITED
-
-
 
 # Merge LMA data with the Orbis export to connect the postcode, huisnummers with a BVDid to eventually get a NACE code per waste entry
 LMA_actors['Huisnr'] = pd.to_numeric(LMA_actors['Huisnr'], errors='coerce') #making sure the datatypes for Huisnummer is the same for the two merged dataframes
 LMA_Orbis_by_address = pd.merge(LMA_actors,ORBIS_all,on=['Postcode','Huisnr'],how='left')
 
-LMA_Orbis_by_address.rename(columns={'BvDid':'BvDid_by_address', 'NACE':'NACE_by_address',
-                                     'Postcode': 'LMA_postcode', 'Plaats': 'LMA_plaats',
-                                     'Straat': 'LMA_straat', 'Huisnr':'LMA_huisnr', 'City': 'LMA_city',
-                                     'ORBIS_name': 'ORBIS_name_by_address', 'Year':'Year_by_address'}, inplace=True)
+LMA_Orbis_by_address.rename(columns={'BvDid':'BvDid_by_address', 'nace':'NACE_by_address',
+                                     'postcode': 'LMA_postcode', 'Huisnr':'LMA_huisnr',
+                                     'name': 'ORBIS_name_by_address', 'Year':'Year_by_address'}, inplace=True)
 LMA_Orbis_by_address.drop_duplicates(inplace=True)
 
-
-#_________________________________________________________
-#       b) For connecting the LMA database with the Orbis exports based on company name
-#_________________________________________________________
-
-
-ORBIS_by_name = pd.read_excel('Exports_{0}_part1/ORBIS_by_name.xlsx'.format(scope))
-ORBIS_by_name = ORBIS_by_name[['Company name', 'Matched bvdid']]
-ORBIS_by_name.rename(columns={'Company name':'Name', 'Matched bvdid':'BvDid'},inplace=True)
-
-#data cleaning
-ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.upper()
-ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('BV', '')
-ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.replace('B.V.', '')
-ORBIS_by_name['Name'] = ORBIS_by_name['Name'].str.strip()
-ORBIS_by_name.drop_duplicates(subset= 'Name', inplace = True)
-
-# Merge Orbis export based on batch search in ORBIS with the overall database
-ORBIS_by_name_wNACE = pd.merge(ORBIS_by_name, ORBIS_all, on=['BvDid'], how='inner', validate='m:1')
-ORBIS_by_name_wNACE.replace(np.NaN, '',inplace=True) #data cleaning
-ORBIS_by_name_wNACE.rename(columns={'ORBIS_name': 'ORBIS_name_by_name',
-                                   'Postcode': 'ORBIS_postcode', 'City': 'ORBIS_city', 'Huisnr': 'ORBIS_huisnr',
-                                   'NACE': 'NACE_by_name', 'Year': 'Year_by_name'}, inplace=True)
+print LMA_Orbis_by_address.columns
+print ORBIS_by_name.columns
 
 # Merge LMA data with ORBIS based on the batch search on company names in ORBIS
-actors_full_merge = pd.merge(LMA_Orbis_by_address, ORBIS_by_name_wNACE, on=['Name'], how = 'left')
-actors_full_merge.replace(np.NaN, '', inplace=True) #data cleaning
+actors_full_merge = pd.merge(LMA_Orbis_by_address, ORBIS_by_name_wNACE, on=['LMA_key'], how='left')
+actors_full_merge.replace(np.NaN, '', inplace=True)  # data cleaning
 actors_full_merge.rename(columns={'BvDid': 'BvDid_by_name'}, inplace=True)
 actors_full_merge.drop_duplicates(inplace=True)
+
+actors_full_merge.to_excel('actors_full_merge.xlsx')
 
 
 #_________________________________________________________
@@ -339,7 +363,7 @@ unconfirmed_output = pd.concat([unmatched_output, by_address_output, by_name_out
     # inzamelaar can belong to groups E, H, otherwise UNKNOWN
     # ontvanger can belong to groups E, H, otherwise UNKNOWN
     # verwerker can belong to groups E, H, otherwise UNKNOWN
-    # exception: an actors has been matched by both name and address
+    # exception: an actor has been matched by both name and address
 
 actors_constraint1 = unconfirmed_output[unconfirmed_output['Role'] != 'ontdoener']
 actors_constraint1 = actors_constraint1[actors_constraint1['NACE'].str.startswith('E') == False]
