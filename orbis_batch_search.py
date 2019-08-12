@@ -16,7 +16,7 @@ def to_actor_table(fpath, fname):
     orbis = pd.read_excel(fpath + fname, sheet_name='Results')
 
     GDSE_columns = ['BvDid', 'name', 'NACE', 'Code', 'Year', 'Description english',
-                    'Description original', 'BvDii', 'Website', 'Employess',
+                    'Description original', 'BvDii', 'Website', 'Employees',
                     'Turnover', 'Postcode', 'Address', 'City', 'Country', 'wkt']
 
     orbis = orbis[['BvD ID number',
@@ -101,7 +101,7 @@ tables.drop_duplicates(subset=['BvDid'], inplace=True)
 
 # extract house number from the address
 tables['Huisnummer'] = tables['Address'].apply(lambda x: extract_huisnr(x))
-# skip those entries that do not have a NACE code as they do not serve the purpose
+
 
 # rewrite NACE to include the activity group e.g. 3821 to E-3821
 nace_table = pd.read_excel('{0}/LMA data/NACE_table.xlsx'.format(projectname))
@@ -123,7 +123,9 @@ if len(no_nace.index) > 0:
 merged = pd.merge(tables, summary, on="BvDid")
 merged.rename(columns={'name': 'ORBIS name'})
 
+# skip those entries that do not have a NACE code as they do not serve the purpose
 merged.dropna(subset=['NACE'], inplace=True)
+tables.dropna(subset=['NACE'], inplace=True)
 print found - len(merged.index), 'matches have been removed due to the missing NACE code'
 
 merged.to_excel(OutputFolder + "ORBIS_by_name.xlsx", encoding='utf-8', index=False)
@@ -148,5 +150,5 @@ name_count = len(orbis_by_name.index)
 all_count = len(orbis_all.index)
 
 print nace_count, 'actors have been selected by relevant NACE codes'
-print name_count, 'actors have been found usinf batch search'
+print name_count, 'actors have been found using batch search'
 print all_count, 'actors make up the final set of ORBIS actors'

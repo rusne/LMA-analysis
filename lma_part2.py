@@ -66,17 +66,16 @@ if 'Export_LMA_actors_without_postcode.xlsx' in os.listdir(Part1Folder):
     LMA_actors_w_postcode = pd.read_excel(InputFolder + 'Input_actors_without_postcode.xlsx'.format(scope))
 
     # check if actor file is older than the postcode file - if not, give a warning as indexes might not match
-    t1 = os.path.getctime('Exports_{0}_part1/Export_LMA_actors.xlsx'.format(scope))
-    t2 = os.path.getctime('Exports_{0}_part1/Input_actors_without_postcode.xlsx'.format(scope))
-    print t1
-    print t2
-    if t1 < t2:
+    t1 = os.path.getctime(Part1Folder + 'Export_LMA_actors.xlsx')
+    t2 = os.path.getctime(InputFolder + 'Input_actors_without_postcode.xlsx')
+
+    if t1 > t2:
         print 'WARNING! Your part1 exports are newer than other input files, make sure they are all up to date'
 
-    LMA_actors.update(LMA_actors_w_postcode)
+    LMA_actors.update(LMA_actors_w_postcode, overwrite=False)
     no_postcode = LMA_actors[LMA_actors['Postcode'] == np.NaN]
     if len(no_postcode.index) > 0:
-        print 'WARNING! Not all LMA actors have a postcode'
+        print 'WARNING! Not all LMA actors have a postcode, this will result in unexpected matching behaviour'
 
 # LMA_actors.replace(np.NaN, '',inplace=True) #data cleaning
 
@@ -96,11 +95,11 @@ ORBIS_by_name = pd.read_excel(InputFolder + '/ORBIS_by_name.xlsx'.format(scope))
 ORBIS_all = pd.read_excel(InputFolder + 'ORBIS_all.xlsx'.format(scope))
 
 
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 # 2 )  F U N C T I O N S
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
 
 def give_bvdid(ind, scope, start_bvd):
@@ -152,6 +151,9 @@ lma_key_role_address['address_key'] = lma_key_role_address['Postcode'] + ' ' + l
 
 ORBIS_all['postcode'] = ORBIS_all['postcode'].str.replace(' ','')
 ORBIS_all['postcode'] = ORBIS_all['postcode'].str.upper()
+# remove entries without an address as they cannot be matched anyway
+# this cleaning is not done earlier because the company with a vaild nace can still be matched by name
+ORBIS_all.dropna(subset=['postcode'], inplace=True)
 
 ORBIS_all['huisnummer'] = ORBIS_all['huisnummer'].fillna(-999)
 ORBIS_all['huisnummer'] = ORBIS_all['huisnummer'].astype(int)  # avoid float-ization
@@ -194,7 +196,7 @@ LMA_output_columns = ['LMA_key', 'Name',
                       'Matched BvDid', 'Matched year', 'how']
 
 ORBIS_output_columns = ['BvDid', 'name', 'NACE', 'Code', 'Year', 'Description english',
-                        'Description original', 'BvDii', 'Website', 'Employess',
+                        'Description original', 'BvDii', 'Website', 'Employees',
                         'Turnover', 'Postcode', 'Address', 'City', 'Country', 'wkt']
 
 # _____________________________________________________________________
@@ -205,7 +207,7 @@ confirmed_or_unmatched = matched[matched['BvDid_by_address'] == matched['BvDid_b
 
 confirmed = confirmed_or_unmatched[confirmed_or_unmatched['BvDid_by_address'] != '']
 confirmed_count = len(confirmed.index)
-print confirmed_count, 'actors have been confirmed'
+print '1a:', confirmed_count, 'actors have been confirmed'
 
 #output part 1a
 shortlist = confirmed[['BvDid_by_name', 'LMA_key', 'who']]
@@ -232,7 +234,7 @@ ORBIS_actors_output.to_excel(ExportFolder + 'Export_ORBIS_actors.xlsx')
 
 unmatched = confirmed_or_unmatched[confirmed_or_unmatched['BvDid_by_address'] == '']
 unmatched_count = len(unmatched.index)
-print unmatched_count, 'actors have been unmatched'
+print '1b:', unmatched_count, 'actors have been unmatched'
 
 #output file 1b
 shortlist = unmatched[['LMA_key', 'who']]
@@ -268,7 +270,7 @@ single_match = matched_step2[matched_step2['freq'] == 1]
 
 by_address = single_match[single_match['BvDid_by_name'] == '']
 by_address_count = len(by_address.index)
-print by_address_count, "actors have been matched only by address"
+print '2a:', by_address_count, "actors have been matched only by address"
 
 #output file 2a
 shortlist = by_address[['LMA_key', 'who', 'NACE_by_address',
@@ -295,7 +297,7 @@ by_address_output.columns = LMA_output_columns
 
 by_name = single_match[single_match['BvDid_by_address'] == '']
 by_name_count = len(by_name.index)
-print by_name_count, "actors have been matched only by name"
+print '2b:', by_name_count, "actors have been matched only by name"
 
 #output file 2b
 shortlist = by_name[['LMA_key', 'who', 'NACE_by_name',
@@ -323,11 +325,11 @@ by_name_output.columns = LMA_output_columns
 
 by_name_and_address = single_match[(single_match['BvDid_by_name'] != '') & (single_match['BvDid_by_address'] != '')]
 by_name_and_address_count = len(by_name_and_address.index)
-print by_name_and_address_count, "actors have been matched by name and address to different entities"
+print '2c:', by_name_and_address_count, "actors have been matched by name and address to different entities"
 
 by_na_same_nace = by_name_and_address[by_name_and_address['NACE_by_name'] == by_name_and_address['NACE_by_address']]
 by_na_same_nace_count = len(by_na_same_nace.index)
-print by_na_same_nace_count, "of them still have the same NACE code"
+print '\t', by_na_same_nace_count, "of them still have the same NACE code"
 
 by_na_diff_nace = by_name_and_address[by_name_and_address['NACE_by_name'] != by_name_and_address['NACE_by_address']]
 
@@ -405,7 +407,7 @@ same_NACE = step3[step3['NACE_options'] == 1]
 same_NACE.drop_duplicates(subset=['LMA_key', 'who', 'NACE'], inplace=True)
 
 same_NACE_count = len(same_NACE.index)
-print same_NACE_count, 'actors have been matched to multiple entities but all of the same NACE code'
+print '3a:', same_NACE_count, 'actors have been matched to multiple entities but all of the same NACE code'
 
 # output file 3a
 shortlist = same_NACE[['LMA_key', 'who', 'NACE', 'ORBIS_name', 'ORBIS_Postcode', 'ORBIS_BvDid', 'Year']]
@@ -431,7 +433,7 @@ step3 = step3[step3['NACE_options'] != 1]
 
 ambiguous_match = step3.loc[step3.groupby(['LMA_key', 'who'])['Year'].idxmax()]
 ambiguous_match_count = len(ambiguous_match.index)
-print ambiguous_match_count, "have been matched ambiguously"
+print '3b:', ambiguous_match_count, "have been matched ambiguously"
 
 # output file 3b
 shortlist = ambiguous_match[['LMA_key', 'who', 'NACE', 'ORBIS_name', 'ORBIS_Postcode', 'ORBIS_BvDid', 'Year']]
@@ -453,6 +455,7 @@ ambiguous_output.columns = LMA_output_columns
 # N A C E    C O N S T R A I N T S
 # _________________________________________________________________________
 
+
 unconfirmed_output = pd.concat([unmatched_output, by_address_output, by_name_output, by_name_and_address_output, by_nace_output, ambiguous_output])
 print 'unconfirmed_output:', len(unconfirmed_output.index)
 
@@ -472,25 +475,26 @@ actors_no_constraint1 = pd.concat([actors_constraint1, unconfirmed_output]).drop
 
 actors_constraint1['NACE'] = actors_constraint1['Role'].apply(give_nace)
 
-all_actors = pd.concat([confirmed_output, actors_no_constraint1, actors_constraint1])
+unconfirmed_output = pd.concat([actors_no_constraint1, actors_constraint1])
+all_actors = pd.concat([confirmed_output, unconfirmed_output])
 print 'all_actors:', len(all_actors.index)
 
 # export the final list of actors
 
-all_actors.to_excel(ExportFolder + 'Export_LMA_all_actors.xlsx')
+all_actors.to_excel(ExportFolder + 'Export_all_actor_matches.xlsx')
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 # N E W    A C T O R   T A B L E
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
 new_actors = unconfirmed_output.copy()
 # the unknown fields are filled with empty cells
 new_actors['code'] = ''
 new_actors['year'] = 2016
 new_actors['description english'] = ''
-new_actors['description original'] = ''
+new_actors['description original'] = new_actors['Role']
 new_actors['BvDii'] = ''
 new_actors['Website'] = ''
 new_actors['employees'] = ''
@@ -498,27 +502,27 @@ new_actors['turnover'] = ''
 new_actors = new_actors[['BvDid', 'Name', 'code', 'year', 'description english', 'description original',
                          'BvDii', 'Website', 'employees', 'turnover', 'NACE']]
 
-new_actors.to_excel('Exports_{0}_part2/Export_LMA_actors.xlsx'.format(scope))
+new_actors.to_excel(ExportFolder + 'Export_LMA_actors.xlsx')
 
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 #  A C T O R    L O C A T I O N S    T A B L E
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
 locations = all_actors.copy()
 locations = locations[['BvDid', 'Postcode', 'Address', 'City']]
 locations.drop_duplicates(subset=['BvDid'], inplace=True)
 
-locations.to_excel(ExportFolder +'Export_LMA_actors_locations.xlsx')
+locations.to_excel(ExportFolder +'Export_LMA_actors_locations.xlsx', index=False)
 
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 #  A C T I V I T Y  &  A C T I V I T Y   G R O U P   T A B L E S
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
 activities = all_actors[['NACE']]
 activities.drop_duplicates(inplace=True)
@@ -535,3 +539,15 @@ activity_group_table = nace_table_merged[['AG code', 'Activity Group']]
 activity_group_table.drop_duplicates(inplace=True)
 activity_group_table.columns = ['Code', 'Name']
 activity_group_table.to_excel(ExportFolder + 'Export_LMA_activity_groups.xlsx')
+
+# _____________________________________________________________________________
+# _____________________________________________________________________________
+#  U N K N O W N   N A C E   C O D E S
+# _____________________________________________________________________________
+# _____________________________________________________________________________
+
+unknown_nace_table = all_actors[all_actors['NACE'].str[0] == 'W']
+unknown_nace_table = unknown_nace_table[['BvDid', 'LMA_key', 'Name', 'Postcode',
+                                         'Address', 'City', 'Role', 'NACE']]
+print 'unknown nace:', len(unknown_nace_table.index)
+unknown_nace_table.to_excel(ExportFolder + 'Unknown_NACE.xlsx')

@@ -1,20 +1,20 @@
-import os #use to create new folders and change in between different folders
+import os # use to create new folders and change in between different folders
 
-import pandas as pd #python data analysis library
+import pandas as pd # python data analysis library
 
-import numpy as np #python scientific computing library
+import numpy as np # python scientific computing library
 
-import warnings #ignore unnecessary warnings
+import warnings # ignore unnecessary warnings
 warnings.simplefilter(action = 'ignore', category = FutureWarning)
 pd.options.mode.chained_assignment = None
 
-#_________________________________________________
+# _________________________________________________
 
-# 0.a )  C H O O S I N G   P R O J E C T
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# 0.a )  C H O O S I N G   P R O J E C T   &   S C O P E
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
-#choose PROJECT: REPAiR or CINDERELA
+# choose PROJECT: REPAiR or CINDERELA
 while True:
     project = raw_input('Choose project: REP or CIN\n')
     if project == 'REP':
@@ -26,13 +26,6 @@ while True:
     else:
         print 'Wrong choice.'
 
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-
-# 0.a )  R E A D I N G   F I L E S
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
-
 # choose scope: Food Waste or Construction & Demolition Waste
 while True:
     scope = raw_input('Choose scope: CDW or FW\n')
@@ -41,58 +34,139 @@ while True:
     else:
         print 'Wrong choice.'
 
-Exportfolder = '{0}/LMA data/Exports_{1}_part3'.format(projectname, scope)
-if not os.path.exists(Exportfolder): # create folder if it does not exist
-    os.makedirs(Exportfolder)
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+
+# 0.a )  R E A D I N G   F I L E S
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+
+
+
 
 DataFolder = "{0}/LMA data".format(projectname)
-os.chdir(DataFolder) # change to Part 1 folder
+os.chdir(DataFolder)  # change to Part 1 folder
 
-#_________________________________________________________
+ExportFolder = 'Exports_{1}_part3/'.format(projectname, scope)
+if not os.path.exists(ExportFolder):  # create folder if it does not exist
+    os.makedirs(ExportFolder)
+
+Part1Folder = 'Exports_{0}_part1/'.format(scope)
+Part2Folder = 'Exports_{0}_part2/'.format(scope)
+InputFolder = 'Input_{0}_part3/'.format(scope)
+Input2Folder = 'Input_{0}_part2/'.format(scope)
+
+# _________________________________________________________
 # 0.b) M O D E L L I N G   V A R I A B L E S
-#_________________________________________________________
+# _________________________________________________________
 
 # take out variables from the modelling decision input sheet
-Modelling_Decisions=pd.read_excel('Interface_data.xlsx') #read
+Modelling_Decisions = pd.read_excel('Interface_data.xlsx')
 
-Sensitivity_boundary=Modelling_Decisions.loc[2]['Value'] #set the sensitivity boundary as indicated in the Interface_data file as the boundary
-Sensitivity_boundary=float(Sensitivity_boundary)
+Sensitivity_boundary = Modelling_Decisions.loc[2]['Value']  # set the sensitivity boundary as indicated in the Interface_data file as the boundary
+Sensitivity_boundary = float(Sensitivity_boundary)
 
-#_________________________________________________________
- #0.C) Reading in the Comprehensive table from Part 1 and the material correspondance table
- #_________________________________________________________
+# _________________________________________________________
+# 0.C) Reading in the Comprehensive table from Part 1 and the material correspondance table
+# _________________________________________________________
 
-LMA = pd.read_excel('Exports_{0}_part1/Export_LMA_Analysis_comprehensive_part1.xlsx'.format(scope))
-#if manual matching of actors has been made, that file could be used instead of the automatically generated one
-while True:
+actors_matched = pd.read_excel(Part2Folder + 'Export_all_actor_matches.xlsx')
+
+actors_matched = actors_matched[['LMA_key', 'NACE', 'BvDid', 'Role']]
+
+LMA = pd.read_excel(Part1Folder + 'Export_LMA_Analysis_comprehensive_part1.xlsx')
+
+# read the correspondance table between the EWC code, waste description and GDSE material hierarchy
+corresp = pd.read_excel(InputFolder + 'corresp_composition_materials.xlsx')
+
+# _________________________________________________________
+# 1) Incorporate manually matched actors (if any)
+# _________________________________________________________
+
+# if manual matching of actors has been made,
+# that file should be used to update the automatically generated one
+# same algorithm as with postcode, except that it should overwrite the NACE fields
+# TODO: check if index did not get duplicated
+while False:
     manual = raw_input('Has a manual matching of actors been made? Y/N\n')
     if manual == 'Y':
-        actors_matched = pd.read_excel('Exports_{0}_part2/actors_matched_manually.xlsx'.format(scope))
+        manually_matched = pd.read_excel('Manual_corr_{0}/Unknown_NACE_matched_manually.xlsx'.format(scope))
+
+        # create a table to update actors after they have been uploaded into the GDSE
+        updated_actors = manually_matched.copy()
+        # the unknown fields are filled with empty cells
+        updated_actors['code'] = ''
+        updated_actors['year'] = 2016
+        updated_actors['description english'] = ''
+        updated_actors['description original'] = updated_actors['Role']
+        updated_actors['BvDii'] = ''
+        updated_actors['Website'] = ''
+        updated_actors['employees'] = ''
+        updated_actors['turnover'] = ''
+        updated_actors = updated_actors[['BvDid', 'Name', 'code', 'year', 'description english', 'description original',
+                                 'BvDii', 'Website', 'employees', 'turnover', 'NACE']]
+
+        updated_actors.to_excel(ExportFolder + 'Update_manually_matched_actors.xlsx')
+
+        # as actors might be matched to activities hat were previously not in the list, they also need to be updated
+
+        activities = updated_actors[['NACE']]
+        activities.drop_duplicates(inplace=True)
+
+        nace_table = pd.read_excel('NACE_table.xlsx'.format(projectname))
+        nace_table.rename(columns={'Code':'NACE'}, inplace=True)
+        nace_table_merged = pd.merge(activities, nace_table, how='left', on='NACE')
+
+        activity_table = nace_table_merged[['NACE', 'Name', 'AG code']]
+        activity_table.columns = ['NACE', 'Name', 'AG']
+        activity_table.to_excel(ExportFolder + 'Update_LMA_activities.xlsx')
+
+        activity_group_table = nace_table_merged[['AG code', 'Activity Group']]
+        activity_group_table.drop_duplicates(inplace=True)
+        activity_group_table.columns = ['Code', 'Name']
+        activity_group_table.to_excel(ExportFolder + 'Update_LMA_activity_groups.xlsx')
+
+        # merge updated actors into the main actor table
+
+        manual = manually_matched[['BvDid', 'NACE']]
+        actors_matched.rename(columns={'NACE': 'upd_NACE'}, inplace=True)
+        updated = pd.merge(actors_matched, manual, on='BvDid',
+                           how='left', validate='many_to_one')
+        updated['NACE'].fillna(value=updated['upd_NACE'], inplace=True)
+        updated.drop(columns=['upd_NACE'], inplace=True)
+        actors_matched = updated
         break
     elif manual == 'N':
-        actors_matched = pd.read_excel('Exports_{0}_part2/actors_matched.xlsx'.format(scope))
         break
     else:
         print 'Wrong choice.'
 
-actors_matched = actors_matched[['LMA_key', 'NACE', 'BvDid', 'Role']]
-
-#read the correspondance table between the EWC code, waste description and GDSE material hierarchy
-corresp = pd.read_excel('Exports_{0}_part2/corresp_composition_materials.xlsx'.format(scope))
-
-
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 # 4 ) M E R G I N G   A C T O R S   T O   T H E I R    B V D I D
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
-#_______________________________________________________________________________________________________________________________
+# _______________________________________________________________________________________________________________________________
 # connecting all actors in the flows to their BVDiDs
-#_______________________________________________________________________________________________________________________________
+# _______________________________________________________________________________________________________________________________
+
+# if any of the actors orginally did not have postcodes, read in the manually searched postcodes
+if 'Export_LMA_actors_without_postcode.xlsx' in os.listdir(Part1Folder):
+    LMA_actors_w_postcode = pd.read_excel(Input2Folder + 'Input_actors_without_postcode.xlsx'.format(scope))
+    LMA_actors_w_postcode = LMA_actors_w_postcode[['Name', 'Postcode', 'who']]
+    LMA_actors_w_postcode.rename(columns={'Postcode': 'updPostcode'}, inplace=True)
+    update_postcode = True
+else:
+    update_postcode = False
 
 
 roles = ['Ontdoener', 'Inzamelaar', 'Ontvanger', 'Verwerker']
+
+
+def clean_white_space(string):
+    return ' '.join(string.split())
+
 
 for role in roles:
 
@@ -100,13 +174,20 @@ for role in roles:
     if role == 'Ontdoener':
         postcode = 'Postcode'
 
-    LMA[postcode] = LMA[postcode].str.replace(' ','')
-    LMA[postcode] = LMA[postcode].str.upper()
+    LMA[role].replace(np.NaN, '',inplace=True)
     LMA[role] = LMA[role].str.upper()
     LMA[role] = LMA[role].str.replace('BV', '')
     LMA[role] = LMA[role].str.replace('B.V.', '')
     LMA[role] = LMA[role].str.strip()
     LMA[role] = LMA[role].str.upper()
+    LMA[role] = LMA[role].apply(clean_white_space)
+
+    if update_postcode:
+        w_role = LMA_actors_w_postcode[LMA_actors_w_postcode['who'] == role.lower()]
+        temp = pd.merge(LMA, w_role, left_on=role, right_on='Name', how='left')
+        LMA[postcode].fillna(value=temp['updPostcode'], inplace=True)
+    LMA[postcode] = LMA[postcode].str.replace(' ','')
+    LMA[postcode] = LMA[postcode].str.upper()
 
     actors_by_role = actors_matched[actors_matched['Role'] == role.lower()]
 
@@ -115,25 +196,26 @@ for role in roles:
     LMA_merged.rename(columns={'BvDid': '{0}_BvDid'.format(role)}, inplace=True)
     LMA = LMA_merged
 
-#_______________________________________________________________________________________________________________________________
+# _______________________________________________________________________________________________________________________________
 # connecting the whole flow to the NACE of the waste producer (herkomst/ontdoener)
-#_______________________________________________________________________________________________________________________________
+# _______________________________________________________________________________________________________________________________
 
 LMA['LMA_key'] = LMA['Ontdoener'] + ' ' + LMA['Postcode']
 ontdoeners = actors_matched[actors_matched['Role'] == 'ontdoener']
 LMA_merged = pd.merge(LMA, ontdoeners[['LMA_key', 'NACE']], how='left', on='LMA_key')
 LMA = LMA_merged
 
+LMA.to_excel('LMA.xlsx')
 
 
 # provide sensitivity data only on non-route entries
 LMA_sens_check = LMA[LMA['Route'] == 'JA']
 
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 # 5 ) S E N S I T I V I T Y    C H E C K
-#________________________________________________________________________________________________________________________________
-#________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
+# ________________________________________________________________________________________________________________________________
 
 #######
 # STEP 5 a
@@ -182,17 +264,17 @@ if scope == 'FW':
     #######
     # STEP 6
 
-    #_________________________________________________________
+    # _________________________________________________________
     #       a) For connecting the fractios of FW according to the 'CBS Voedselverspilling report'
-    #_________________________________________________________
+    # _________________________________________________________
     # Reading in the fraction tables from the report
-    CBS_FW_fractions=pd.read_excel('CBS_voedselverspilling.xlsx',sheetname='fraction_FW',skiprows=4)
+    CBS_FW_fractions=pd.read_excel(InputFolder + 'CBS_voedselverspilling.xlsx',sheetname='fraction_FW',skiprows=4)
     CBS_FW_fractions.rename(columns={'NACE_code':'NACE lv2'},inplace=True)
     del CBS_FW_fractions['NACE_name']
 
 
     #read in document (originally a google doc)
-    Afvalbenamingen_EN=pd.read_excel('FW_Eurals_BenamingAfval.xlsx')
+    Afvalbenamingen_EN=pd.read_excel(InputFolder + 'FW_Eurals_BenamingAfval.xlsx')
     Afvalbenamingen_EN=Afvalbenamingen_EN[['EuralCode','Dutch name','Avoidable (x)']]
     Afvalbenamingen_EN.rename(columns={'Dutch name':'BenamingAfval'},inplace=True)
 
@@ -280,16 +362,17 @@ WT_descr=pd.read_excel('Preprocessing_description.xlsx')
 WT_descr.drop_duplicates(inplace=True)
 LMA_w_BVDid = pd.merge(LMA_w_BVDid, WT_descr, on='VerwerkingsOmschrijving', how='left')
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 # P R E P A R I N G   F I L E S    F O R    G D S E
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
 LMA_toGDSE=LMA_w_BVDid.copy()
 LMA_toGDSE.rename(columns={'MeldPeriodeJAAR': 'Year'}, inplace=True)
 
 #merge correspondance table
+LMA_toGDSE['BenamingAfval'].fillna('', inplace=True)
 LMA_toGDSE['Key'] = LMA_toGDSE['EuralCode'].map(str) + ' ' + LMA_toGDSE['BenamingAfval']
 LMA_toGDSE['Key'] = LMA_toGDSE['Key'].str.lower()
 LMA_toGDSE['Key'] = LMA_toGDSE['Key'].str.strip()
@@ -304,17 +387,18 @@ LMA_toGDSE_corresp = pd.merge(LMA_toGDSE, corresp, on='Key', how='left')
 
 LMA_toGDSE_corresp.to_excel('Exports_{0}_part3/Export_LMA_Analysis_comprehensive_part3.xlsx'.format(scope))
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 # C O M P O S I T I O N   T A B L E
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
-Composition_table = LMA_toGDSE_corresp[['NACE', 'Key', 'Material', 'Fraction', 'Avoidable', 'Haz']]
-Composition_table['Name'] = Composition_table['NACE'] + ' ' + Composition_table['Key']
+Composition_table = LMA_toGDSE_corresp[['NACE', 'Key', 'Material', 'Fraction', 'Avoidable', 'Haz', 'Processing description']]
+
 
 if scope == 'FW':
     Composition_table['Source'] = 'cbs2017'
+    Composition_table['Name'] = Composition_table['Key'] + " " + Composition_table['Fraction'].astype(str) + " " + Composition_table['Processing description']
 
     # the fractions in CBS report have been reported for the avoidable parts of the food waste
     # the unavoidable parts need to be calculated
@@ -329,13 +413,14 @@ if scope == 'FW':
     Composition_table.sort_values(['Name'], inplace=True)
 
 elif scope == 'CDW':
+    Composition_table['Name'] = Composition_table['Key'] + " " + Composition_table['Processing description']
     Composition_table['Source'] = 'lma2018'
     Composition_table['Fraction'] = 1
     Composition_table['Avoidable'] = 'FALSE'
 
 Composition_table['Hazardous'] = np.where(Composition_table['Haz'] == 'Hazardous', True, False)
 
-Composition_table.drop_duplicates(inplace=True)
+Composition_table.drop_duplicates(subset=(['Name', 'Avoidable']), inplace=True)
 
 Composition_table_output = Composition_table[['NACE', 'Name', 'Material', 'Fraction', 'Avoidable', 'Source', 'Hazardous']]
 
@@ -343,15 +428,18 @@ Composition_table_output = Composition_table[['NACE', 'Name', 'Material', 'Fract
 Composition_table_output.to_excel('Exports_{0}_part3/Export_Composition_{0}.xlsx'.format(scope))
 
 
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 # F L O W   T A B L E
-#_____________________________________________________________________________
-#_____________________________________________________________________________
+# _____________________________________________________________________________
+# _____________________________________________________________________________
 
 
 Flow_table = LMA_toGDSE.copy()
-Flow_table['Composition'] = Flow_table['NACE'] + ' ' + Flow_table['Key']
+if scope == 'FW':
+    Flow_table['Composition'] = Flow_table['Key'] + " " + Flow_table['Fraction'].astype(str) + " " + Flow_table['Processing description']
+else:
+    Flow_table['Composition'] = Flow_table['Key'] + " " + Flow_table['Processing description']
 Flow_table['Waste'] = True
 Flow_table['Source'] = 'lma2018'
 
@@ -427,7 +515,7 @@ Flow_table_output = pd.concat([Flow_table_herkomst_inzamelaar,Flow_table_herkoms
 
 Flow_table_output = Flow_table_output[Flow_table_output['Origin']!=Flow_table_output['Destination']]
 
-# Some of the actors have different names but got matched to the same BvDid (were the same actors)
+# Some of the actors participate in multiple flow chains
 # That creates duplicate flows (same origin-destination-composition), in that case the flows must be aggregated
 Flow_table_output['Amount'] = Flow_table_output.groupby(['Origin', 'Destination', 'Composition'])['Amount'].transform('sum')
 Flow_table_output['Amount'] = (Flow_table_output['Amount']/1000).round(0)

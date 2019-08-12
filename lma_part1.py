@@ -126,7 +126,8 @@ elif scope == 'CDW':
    cleaned = len(LMA.index)
 
    print combined - cleaned, 'duplicate lines have been found and removed'
-   print 'Final dataset consists of ', cleaned, ' lines'
+
+print 'Final dataset consists of ', len(LMA.index), ' lines'
 
 LMA['Scope'] = scope  # add the scope in a column
 
@@ -530,7 +531,7 @@ for i in range(len(slices) - 1):
     end = slices[i + 1]
     actors_batch[start:end].to_excel('ORBIS_batch_search/LMA_{0}_{1}.xlsx'.format(scope, end), index = False)
 
-print count, "actors have to be searched in ORBIS database"
+print count, "unique actor names have to be searched in ORBIS database"
 
 
 #_____________________________________________________________________________
@@ -542,9 +543,5 @@ print count, "actors have to be searched in ORBIS database"
 
 compositions = comprehensive[['EuralCode', 'BenamingAfval']]
 compositions.drop_duplicates(inplace=True)
+print len(compositions.index), 'unique waste compositions (ewc + BenamingAfval) have been found'
 compositions.to_excel('Export_LMA_compositions.xlsx')
-
-
-
-
-print "Comprehensive table, actors and compositions have been exported"
