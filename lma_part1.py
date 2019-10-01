@@ -196,7 +196,7 @@ AMA_cities.drop_duplicates(inplace=True) #cleaning data
 
 
 # reading in the table with the eural/ewc codes that are related to FW and CDW
-Eural_9X = pd.read_excel('EURAL_codes_{0}.xlsx'.format(scope))
+Eural_9X = pd.read_excel('Input_FW_part1/EURAL_codes_{0}.xlsx'.format(scope))
 Eural_9X.rename(columns={'Eural_code':'EuralCode'},inplace=True)
 # data cleaning
 Eural_9X['EuralCode'] = Eural_9X['EuralCode'].astype(str)

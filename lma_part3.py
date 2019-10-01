@@ -87,7 +87,7 @@ corresp = pd.read_excel(InputFolder + 'corresp_composition_materials.xlsx')
 # that file should be used to update the automatically generated one
 # same algorithm as with postcode, except that it should overwrite the NACE fields
 # TODO: check if index did not get duplicated
-while False:
+while True:
     manual = raw_input('Has a manual matching of actors been made? Y/N\n')
     if manual == 'Y':
         manually_matched = pd.read_excel('Manual_corr_{0}/Unknown_NACE_matched_manually.xlsx'.format(scope))
